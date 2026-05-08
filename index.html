@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カレンダー</title>
+
+<style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+  margin: 0;
+  background: #f0f0f0;
+}
+
+.today-info {
+  background: #fff;
+  padding: 8px;
+  margin: 5px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 10px;
+  transition: transform 0.3s ease;
+}
+
+.day, .date {
+  background: white;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.today {
+  background: orange;
+  color: white;
+}
+
+.sunday { color: red; }
+.saturday { color: blue; }
+
+.holiday {
+  background: pink;
+}
+</style>
+</head>
+
+<body>
+
+<div id="todayInfo" class="today-info">読み込み中...</div>
+
+<div class="header">
+  <button onclick="prevMonth()">←</button>
+
+  <div>
+    <input id="yearInput" type="number" style="width:70px;">年
+    <input id="monthInput" type="number" min="1" max="12" style="width:40px;">月
+    <button onclick="jumpToDate()">移動</button>
+  </div>
+
+  <button onclick="nextMonth()">→</button>
+</div>
+
+<div id="calendar" class="calendar"></div>
+
+<script>
+let currentDate = new Date();
+
+// 予定保存
+let schedules = JSON.parse(localStorage.getItem("schedules")) || {};
+
+// 祝日API
+async function getHolidays(year) {
+  const res = await fetch(`https://holidays-jp.github.io/api/v1/${year}/date.json`);
+  return await res.json();
+}
+
+// 自作イベント（複数対応）
+const todayEvents = {
+  "1-1": ["元日🎍","初日の出の日"],
+  "2-14": ["バレンタイン🍫"],
+  "3-3": ["ひな祭り🎎"],
+  "4-1": ["エイプリルフール😏"],
+  "5-5": ["こどもの日🎏"],
+  "6-1": ["牛乳の日🥛"],
+  "7-7": ["七夕🎋"],
+  "8-15": ["終戦の日"],
+  "10-31": ["ハロウィン🎃"],
+  "12-25": ["クリスマス🎄"]
+};
+
+// ランダム雑学
+const trivia = [
+  "今日はちょっと特別な日かも😏",
+  "世界のどこかで祝われてる日🌍",
+  "歴史が動いた日かもしれない🤔"
+];
+
+// API（歴史イベント）
+async function getTodayEventsFromAPI() {
+  try {
+    const today = new Date();
+    const m = today.getMonth()+1;
+    const d = today.getDate();
+
+    const res = await fetch(`https://history.muffinlabs.com/date/${m}/${d}`);
+    const data = await res.json();
+
+    return data.data.Events[0].text;
+  } catch {
+    return "通信エラー（オフライン？）";
+  }
+}
+
+// 今日の情報表示（強化版）
+async function showTodayInfo(){
+  const now = new Date();
+  const key = `${now.getMonth()+1}-${now.getDate()}`;
+
+  const local = todayEvents[key]?.join("<br>") || "特にない日😴";
+  const random = trivia[Math.floor(Math.random()*trivia.length)];
+  const api = await getTodayEventsFromAPI();
+
+  document.getElementById("todayInfo").innerHTML =
+    `${now.getFullYear()}年 ${now.getMonth()+1}月${now.getDate()}日<br>
+     ${local}<br>
+     🧠 ${api}<br>
+     <small>${random}</small>`;
+}
+
+// カレンダー描画
+async function renderCalendar(){
+  const cal = document.getElementById("calendar");
+  cal.innerHTML = "";
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  document.getElementById("yearInput").value = year;
+  document.getElementById("monthInput").value = month+1;
+
+  const holidays = await getHolidays(year);
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month+1, 0).getDate();
+
+  const days = ["日","月","火","水","木","金","土"];
+
+  days.forEach((d,i)=>{
+    const el=document.createElement("div");
+    el.textContent=d;
+    el.className="day";
+    if(i===0) el.classList.add("sunday");
+    if(i===6) el.classList.add("saturday");
+    cal.appendChild(el);
+  });
+
+  for(let i=0;i<firstDay;i++){
+    cal.appendChild(document.createElement("div"));
+  }
+
+  for(let d=1; d<=lastDate; d++){
+    const el=document.createElement("div");
+    el.className="date";
+
+    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+    if(schedules[dateStr]){
+      el.innerHTML = d + "<br>" + schedules[dateStr];
+    } else {
+      el.textContent = d;
+    }
+
+    const today = new Date();
+    if(year===today.getFullYear() && month===today.getMonth() && d===today.getDate()){
+      el.classList.add("today");
+    }
+
+    const day = new Date(year,month,d).getDay();
+    if(day===0) el.classList.add("sunday");
+    if(day===6) el.classList.add("saturday");
+
+    if(holidays[dateStr]){
+      el.classList.add("holiday");
+      el.title = holidays[dateStr];
+    }
+
+    el.onclick = ()=>{
+      const memo = prompt("予定を入力（空欄で削除）", schedules[dateStr] || "");
+
+      if(memo !== null){
+        if(memo===""){
+          delete schedules[dateStr];
+        } else {
+          schedules[dateStr]=memo;
+        }
+        localStorage.setItem("schedules", JSON.stringify(schedules));
+        renderCalendar();
+      }
+    };
+
+    cal.appendChild(el);
+  }
+}
+
+// 月移動
+function prevMonth(){
+  currentDate.setMonth(currentDate.getMonth()-1);
+  renderCalendar();
+}
+function nextMonth(){
+  currentDate.setMonth(currentDate.getMonth()+1);
+  renderCalendar();
+}
+
+// ジャンプ
+function jumpToDate(){
+  const y=parseInt(yearInput.value);
+  const m=parseInt(monthInput.value);
+  if(!y||!m||m<1||m>12)return alert("正しく入力");
+  currentDate=new Date(y,m-1,1);
+  renderCalendar();
+}
+
+// スワイプ
+let startX=0,endX=0;
+const cal=document.getElementById("calendar");
+
+document.body.addEventListener("touchstart",e=>{
+  startX=e.touches[0].clientX;
+});
+document.body.addEventListener("touchend",e=>{
+  endX=e.changedTouches[0].clientX;
+  const diff=endX-startX;
+  if(Math.abs(diff)<50)return;
+
+  if(diff<0){
+    cal.style.transform="translateX(-100%)";
+    setTimeout(()=>{
+      nextMonth();
+      cal.style.transition="none";
+      cal.style.transform="translateX(100%)";
+      setTimeout(()=>{
+        cal.style.transition="transform 0.3s";
+        cal.style.transform="translateX(0)";
+      },10);
+    },300);
+  }else{
+    cal.style.transform="translateX(100%)";
+    setTimeout(()=>{
+      prevMonth();
+      cal.style.transition="none";
+      cal.style.transform="translateX(-100%)";
+      setTimeout(()=>{
+        cal.style.transition="transform 0.3s";
+        cal.style.transform="translateX(0)";
+      },10);
+    },300);
+  }
+});
+
+// 初期化
+showTodayInfo();
+renderCalendar();
+</script>
+
+</body>
+</html>
