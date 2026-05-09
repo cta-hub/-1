@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<title>カレンダー</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
 
 <style>
@@ -14,6 +16,24 @@ body{
   text-align:center;
 }
 
+/* ヘッダー */
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px;
+  background:white;
+}
+
+button{
+  border:none;
+  border-radius:10px;
+  padding:8px;
+  background:#4dabf7;
+  color:white;
+}
+
+/* カレンダー */
 #calendar{
   display:grid;
   grid-template-columns:repeat(7,1fr);
@@ -34,6 +54,7 @@ body{
 
 .event{font-size:10px;}
 
+/* ポップアップ */
 #popup{
   display:none;
   position:fixed;
@@ -57,9 +78,23 @@ body{
 
 <body>
 
+<header>
+  <button onclick="prevMonth()">←</button>
+
+  <div>
+    <input type="number" id="yearInput" style="width:80px">
+    <input type="number" id="monthInput" style="width:50px">
+    <button onclick="goToDate()">移動</button>
+  </div>
+
+  <button onclick="nextMonth()">→</button>
+</header>
+
 <h2 id="title"></h2>
+
 <div id="calendar"></div>
 
+<!-- ポップアップ -->
 <div id="popup" onclick="closePopup(event)">
   <div id="popupContent"></div>
 </div>
@@ -68,16 +103,19 @@ body{
 let date = new Date();
 let holidays = {};
 
+// 祝日API
 async function loadHolidays(year){
   const res = await fetch(`https://holidays-jp.github.io/api/v1/${year}/date.json`);
   holidays = await res.json();
 }
 
+// 記念日
 const events = {
   "2-14":"バレンタイン",
   "12-25":"クリスマス"
 };
 
+// カレンダー描画
 async function renderCalendar(){
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -93,7 +131,9 @@ async function renderCalendar(){
   const firstDay = new Date(year,month,1).getDay();
   const lastDate = new Date(year,month+1,0).getDate();
 
-  for(let i=0;i<firstDay;i++) cal.innerHTML += "<div></div>";
+  for(let i=0;i<firstDay;i++){
+    cal.innerHTML += "<div></div>";
+  }
 
   for(let d=1; d<=lastDate; d++){
     const el = document.createElement("div");
@@ -119,12 +159,18 @@ async function renderCalendar(){
       </div>
     `;
 
+    const today = new Date();
+    if(d===today.getDate() && month===today.getMonth() && year===today.getFullYear()){
+      el.classList.add("today");
+    }
+
     el.onclick = () => openPopup(year,month,d,holiday);
 
     cal.appendChild(el);
   }
 }
 
+// ポップアップ
 function openPopup(year,month,day,holiday){
   const key=(month+1)+"-"+day;
   const saved=localStorage.getItem(key)||"";
@@ -133,22 +179,63 @@ function openPopup(year,month,day,holiday){
     <h3>${month+1}月${day}日</h3>
     ${holiday ? "<p>"+holiday+"</p>" : ""}
     ${events[key] ? "<p>"+events[key]+"</p>" : ""}
-    <textarea id="memo">${saved}</textarea><br>
+    <textarea id="memo" style="width:100%;height:80px">${saved}</textarea><br>
     <button onclick="saveMemo('${key}')">保存</button>
   `;
 
-  popup.style.display="flex";
+  document.getElementById("popup").style.display="flex";
 }
 
 function closePopup(e){
-  if(e.target.id==="popup") popup.style.display="none";
+  if(e.target.id==="popup"){
+    document.getElementById("popup").style.display="none";
+  }
 }
 
+// 保存
 function saveMemo(key){
-  localStorage.setItem(key, document.getElementById("memo").value);
-  alert("保存😏");
+  const val = document.getElementById("memo").value;
+  localStorage.setItem(key,val);
+  alert("保存した😏");
 }
 
+// 月移動（←→）
+async function prevMonth(){
+  date.setMonth(date.getMonth()-1);
+  await renderCalendar();
+}
+
+async function nextMonth(){
+  date.setMonth(date.getMonth()+1);
+  await renderCalendar();
+}
+
+// 年月移動
+async function goToDate(){
+  const y = document.getElementById("yearInput").value;
+  const m = document.getElementById("monthInput").value;
+
+  if(y && m){
+    date = new Date(y, m-1);
+    await renderCalendar();
+  }
+}
+
+// スワイプ
+let startX = 0;
+
+document.addEventListener("touchstart", e => {
+  startX = e.touches[0].clientX;
+});
+
+document.addEventListener("touchend", e => {
+  let endX = e.changedTouches[0].clientX;
+
+  if(startX - endX > 50) nextMonth();
+  if(endX - startX > 50) prevMonth();
+});
+
+// 初期表示
 renderCalendar();
 </script>
 
